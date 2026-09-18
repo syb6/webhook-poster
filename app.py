@@ -31,9 +31,15 @@ def save_config(config):
 
 @app.route("/")
 def index():
-    """Renders the main web page with loaded configuration."""
+    """Renders the message sender page."""
+    return render_template("index.html")
+
+
+@app.route("/settings")
+def settings():
+    """Renders the configuration page."""
     config = load_config()
-    return render_template("index.html", config=config)
+    return render_template("settings.html", config=config)
 
 
 @app.route("/api/config", methods=["POST"])

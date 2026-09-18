@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Webhook Settings</title>
+    <style>
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background-color: #121212;
+        color: #e0e0e0;
+        display: flex;
+        justify-content: center;
+        padding: 30px;
+      }
+      .container {
+        width: 100%;
+        max-width: 550px;
+        background-color: #1e1e1e;
+        padding: 25px;
+        border-radius: 10px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+      }
+      h2 {
+        color: #5865f2;
+        margin-top: 0;
+      }
+      label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+      }
+      input[type="text"] {
+        width: 100%;
+        padding: 10px;
+        margin-bottom: 12px;
+        background-color: #2b2b2b;
+        border: 1px solid #444;
+        border-radius: 5px;
+        color: #fff;
+        box-sizing: border-box;
+      }
+      button,
+      .back-link {
+        display: block;
+        width: 100%;
+        padding: 12px;
+        box-sizing: border-box;
+        border: none;
+        color: white;
+        font-weight: bold;
+        border-radius: 5px;
+        cursor: pointer;
+        text-align: center;
+        text-decoration: none;
+      }
+      button {
+        background-color: #5865f2;
+      }
+      button:hover {
+        background-color: #4752c4;
+      }
+      .back-link {
+        margin-top: 10px;
+        background-color: #444;
+      }
+      .back-link:hover {
+        background-color: #555;
+      }
+      .status {
+        margin-top: 15px;
+        padding: 10px;
+        border-radius: 5px;
+        display: none;
+        font-weight: bold;
+      }
+      .status.success {
+        background-color: #1b5e20;
+        color: #a5d6a7;
+        display: block;
+      }
+      .status.error {
+        background-color: #b71c1c;
+        color: #ef9a9a;
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2>Webhook Settings</h2>
+
+      <label for="webhook_url">Webhook URL</label>
+      <input
+        type="text"
+        id="webhook_url"
+        value="{{ config.webhook_url }}"
+        placeholder="https://discord.com/api/webhooks/..."
+      />
+
+      <label for="username">Bot Username</label>
+      <input type="text" id="username" value="{{ config.username }}" />
+
+      <label for="avatar_url">Avatar Image URL</label>
+      <input type="text" id="avatar_url" value="{{ config.avatar_url }}" />
+
+      <button type="button" onclick="saveConfig()">Save Settings</button>
+      <a class="back-link" href="{{ url_for('index') }}">Back to sender</a>
+      <div id="status" class="status"></div>
+    </div>
+
+    <script>
+      function showStatus(text, isError) {
+        const statusDiv = document.getElementById("status");
+        statusDiv.innerText = text;
+        statusDiv.className = "status " + (isError ? "error" : "success");
+      }
+
+      async function saveConfig() {
+        const webhook_url = document.getElementById("webhook_url").value;
+        const username = document.getElementById("username").value;
+        const avatar_url = document.getElementById("avatar_url").value;
+
+        try {
+          const res = await fetch("/api/config", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ webhook_url, username, avatar_url }),
+          });
+          const data = await res.json();
+          showStatus(data.message, data.status === "error");
+        } catch (error) {
+          showStatus("Could not save settings. Please try again.", true);
+        }
+      }
+    </script>
+  </body>
+</html>
