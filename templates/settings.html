@@ -67,13 +67,6 @@
       .back-link:hover {
         background-color: #555;
       }
-      .logout-button {
-        margin-top: 10px;
-        background-color: #444;
-      }
-      .logout-button:hover {
-        background-color: #555;
-      }
       .status {
         margin-top: 15px;
         padding: 10px;
@@ -103,20 +96,28 @@
         id="webhook_url"
         value="{{ config.webhook_url }}"
         placeholder="https://discord.com/api/webhooks/..."
+        maxlength="500"
+        required
       />
 
       <label for="username">Bot Username</label>
-      <input type="text" id="username" value="{{ config.username }}" />
+      <input
+        type="text"
+        id="username"
+        value="{{ config.username }}"
+        maxlength="80"
+      />
 
       <label for="avatar_url">Avatar Image URL</label>
-      <input type="text" id="avatar_url" value="{{ config.avatar_url }}" />
+      <input
+        type="text"
+        id="avatar_url"
+        value="{{ config.avatar_url }}"
+        maxlength="500"
+      />
 
       <button type="button" onclick="saveConfig()">Save Settings</button>
       <a class="back-link" href="{{ url_for('index') }}">Back to sender</a>
-      <form method="post" action="{{ url_for('logout') }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-        <button class="logout-button" type="submit">Log out</button>
-      </form>
       <div id="status" class="status"></div>
     </div>
 
@@ -137,7 +138,6 @@
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              "X-CSRF-Token": "{{ csrf_token }}",
             },
             body: JSON.stringify({ webhook_url, username, avatar_url }),
           });

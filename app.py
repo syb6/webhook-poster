@@ -1,64 +1,22 @@
 import json
 import os
-import secrets
-import time
-from functools import wraps
+import tempfile
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from urllib.parse import urlparse
 
-from flask import Flask, jsonify, redirect, render_template, request, session, url_for
-from werkzeug.security import check_password_hash
+from flask import Flask, jsonify, render_template, request
 
 app = Flask(__name__)
-CONFIG_FILE = "config.json"
+CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+DEFAULT_CONFIG = {
+    "webhook_url": "",
+    "username": "smasher",
+    "avatar_url": "https://i.imgur.com/4M34hi2.png",
+}
 app.config.update(
-    SECRET_KEY=os.environ.get("SECRET_KEY") or secrets.token_hex(32),
-    SESSION_COOKIE_HTTPONLY=True,
-    SESSION_COOKIE_SAMESITE="Lax",
-    SESSION_COOKIE_SECURE=os.environ.get("COOKIE_SECURE", "0") == "1",
     MAX_CONTENT_LENGTH=16 * 1024,
 )
-
-APP_USERNAME = os.environ.get("APP_USERNAME", "admin")
-APP_PASSWORD_HASH = os.environ.get("APP_PASSWORD_HASH")
-LOGIN_WINDOW_SECONDS = 60
-MAX_LOGIN_ATTEMPTS = 5
-login_attempts = {}
-
-
-def is_authenticated():
-    return session.get("authenticated") is True
-
-
-def login_required(view):
-    @wraps(view)
-    def wrapped_view(*args, **kwargs):
-        if is_authenticated():
-            return view(*args, **kwargs)
-        if request.path.startswith("/api/"):
-            return jsonify({"status": "error", "message": "Login required."}), 401
-        return redirect(url_for("login", next=request.path))
-
-    return wrapped_view
-
-
-def get_csrf_token():
-    token = session.get("csrf_token")
-    if not token:
-        token = secrets.token_urlsafe(32)
-        session["csrf_token"] = token
-    return token
-
-
-def csrf_protected():
-    supplied_token = request.headers.get("X-CSRF-Token") or request.form.get("csrf_token")
-    return secrets.compare_digest(supplied_token or "", session.get("csrf_token", ""))
-
-
-@app.context_processor
-def inject_security_context():
-    return {"csrf_token": get_csrf_token(), "authenticated": is_authenticated()}
 
 
 @app.after_request
@@ -71,128 +29,71 @@ def add_security_headers(response):
         "script-src 'self' 'unsafe-inline'; img-src 'self' https: data:; "
         "connect-src 'self'; frame-ancestors 'none'"
     )
-    if is_authenticated():
-        response.headers["Cache-Control"] = "no-store"
     return response
-
-
-def login_is_rate_limited(client_id):
-    now = time.monotonic()
-    attempts = [attempt for attempt in login_attempts.get(client_id, []) if now - attempt < LOGIN_WINDOW_SECONDS]
-    login_attempts[client_id] = attempts
-    return len(attempts) >= MAX_LOGIN_ATTEMPTS
-
-
-def record_login_attempt(client_id):
-    login_attempts.setdefault(client_id, []).append(time.monotonic())
 
 
 def load_config():
     """Loads saved settings from config.json if it exists."""
-    if os.path.exists(CONFIG_FILE):
-        try:
-            with open(CONFIG_FILE, "r") as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return {
-        "webhook_url": "",
-        "username": "smasher",
-        "avatar_url": "https://i.imgur.com/4M34hi2.png",
-    }
+    try:
+        with open(CONFIG_FILE, "r", encoding="utf-8") as config_file:
+            saved_config = json.load(config_file)
+        if isinstance(saved_config, dict):
+            return {**DEFAULT_CONFIG, **saved_config}
+    except (OSError, json.JSONDecodeError):
+        pass
+    return DEFAULT_CONFIG.copy()
 
 
 def save_config(config):
     """Saves updated settings to config.json."""
-    with open(CONFIG_FILE, "w") as f:
-        json.dump(config, f, indent=4)
+    directory = os.path.dirname(CONFIG_FILE)
+    with tempfile.NamedTemporaryFile(
+        "w", encoding="utf-8", dir=directory, delete=False
+    ) as temporary_file:
+        json.dump(config, temporary_file, indent=4)
+        temporary_file.write("\n")
+        temporary_path = temporary_file.name
+    os.replace(temporary_path, CONFIG_FILE)
+
+
+def clean_text(value, maximum_length):
+    if not isinstance(value, str):
+        return ""
+    return value.strip()[:maximum_length]
+
+
+def is_valid_webhook_url(value):
+    parsed_url = urlparse(value)
+    return (
+        parsed_url.scheme == "https"
+        and parsed_url.netloc == "discord.com"
+        and parsed_url.path.startswith("/api/webhooks/")
+        and len(parsed_url.path.split("/")) >= 5
+    )
 
 
 @app.route("/")
-@login_required
 def index():
     """Renders the message sender page."""
     return render_template("index.html")
 
 
 @app.route("/settings")
-@login_required
 def settings():
     """Renders the configuration page."""
     config = load_config()
     return render_template("settings.html", config=config)
 
 
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    if is_authenticated():
-        return redirect(url_for("index"))
-
-    next_url = request.args.get("next", "/") if request.method == "GET" else request.form.get("next", "/")
-    if not next_url.startswith("/") or next_url.startswith("//"):
-        next_url = "/"
-
-    if request.method == "POST":
-        if not csrf_protected():
-            return render_template("login.html", error="Invalid request.", next_url=next_url), 400
-
-        client_id = request.remote_addr or "unknown"
-        if login_is_rate_limited(client_id):
-            return render_template("login.html", error="Too many attempts. Try again later.", next_url=next_url), 429
-
-        if not APP_PASSWORD_HASH:
-            return render_template(
-                "login.html",
-                error="Login is not configured. Set APP_PASSWORD_HASH before starting the app.",
-                next_url=next_url,
-            ), 503
-
-        username = request.form.get("username", "")
-        password = request.form.get("password", "")
-        valid_login = (
-            secrets.compare_digest(username, APP_USERNAME)
-            and check_password_hash(APP_PASSWORD_HASH, password)
-        )
-        if valid_login:
-            session.clear()
-            session["authenticated"] = True
-            get_csrf_token()
-            return redirect(next_url)
-
-        record_login_attempt(client_id)
-        return render_template("login.html", error="Invalid username or password.", next_url=next_url), 401
-
-    return render_template("login.html", error=None, next_url=next_url)
-
-
-@app.post("/logout")
-@login_required
-def logout():
-    if not csrf_protected():
-        return jsonify({"status": "error", "message": "Invalid request."}), 400
-    session.clear()
-    return redirect(url_for("login"))
-
-
 @app.route("/api/config", methods=["POST"])
-@login_required
 def update_config():
     """Saves updated configuration from web interface."""
-    if not csrf_protected():
-        return jsonify({"status": "error", "message": "Invalid request."}), 400
     data = request.get_json(silent=True) or {}
-    webhook_url = data.get("webhook_url", "").strip()
-    username = data.get("username", "").strip() or "smasher"
-    avatar_url = (
-        data.get("avatar_url", "").strip() or "https://i.imgur.com/4M34hi2.png"
-    )
+    webhook_url = clean_text(data.get("webhook_url", ""), 500)
+    username = clean_text(data.get("username", ""), 80) or "smasher"
+    avatar_url = clean_text(data.get("avatar_url", ""), 500) or DEFAULT_CONFIG["avatar_url"]
 
-    parsed_webhook = urlparse(webhook_url)
-    if (
-        parsed_webhook.scheme != "https"
-        or parsed_webhook.netloc != "discord.com"
-        or not parsed_webhook.path.startswith("/api/webhooks/")
-    ):
+    if not is_valid_webhook_url(webhook_url):
         return jsonify({"status": "error", "message": "Invalid Discord Webhook URL"}), 400
 
     config = {
@@ -205,21 +106,13 @@ def update_config():
 
 
 @app.route("/api/send", methods=["POST"])
-@login_required
 def send_webhook():
     """Handles posting messages to the Discord Webhook."""
-    if not csrf_protected():
-        return jsonify({"status": "error", "message": "Invalid request."}), 400
     data = request.get_json(silent=True) or {}
     config = load_config()
 
     webhook_url = config.get("webhook_url")
-    parsed_webhook = urlparse(webhook_url or "")
-    if (
-        parsed_webhook.scheme != "https"
-        or parsed_webhook.netloc != "discord.com"
-        or not parsed_webhook.path.startswith("/api/webhooks/")
-    ):
+    if not is_valid_webhook_url(webhook_url or ""):
         return jsonify({"status": "error", "message": "Webhook URL is not configured!"}), 400
 
     content = str(data.get("content", "")).strip()[:2000]

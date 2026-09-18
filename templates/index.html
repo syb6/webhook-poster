@@ -95,13 +95,6 @@
       .settings-link:hover {
         background-color: #555;
       }
-      .logout-button {
-        margin-top: 10px;
-        background-color: #444;
-      }
-      .logout-button:hover {
-        background-color: #555;
-      }
     </style>
   </head>
   <body>
@@ -111,11 +104,6 @@
       <a class="settings-link" href="{{ url_for('settings') }}"
         >Change settings</a
       >
-      <form method="post" action="{{ url_for('logout') }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-        <button class="logout-button" type="submit">Log out</button>
-      </form>
-
       <!-- Send Message Section -->
       <div class="section" style="border: none">
         <h3>Send Message</h3>
@@ -151,7 +139,6 @@
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              "X-CSRF-Token": "{{ csrf_token }}",
             },
             body: JSON.stringify({ content, image_url }),
           });
