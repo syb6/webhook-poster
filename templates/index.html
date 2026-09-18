@@ -131,34 +131,24 @@
         statusDiv.className = "status " + (isError ? "error" : "success");
       }
 
-      async function saveConfig() {
-        const webhook_url = document.getElementById("webhook_url").value;
-        const username = document.getElementById("username").value;
-        const avatar_url = document.getElementById("avatar_url").value;
-
-        const res = await fetch("/api/config", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ webhook_url, username, avatar_url }),
-        });
-        const data = await res.json();
-        showStatus(data.message, data.status === "error");
-      }
-
       async function sendMessage() {
         const content = document.getElementById("content").value;
         const image_url = document.getElementById("image_url").value;
 
-        const res = await fetch("/api/send", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content, image_url }),
-        });
-        const data = await res.json();
-        showStatus(data.message, data.status === "error");
-        if (data.status === "success") {
-          document.getElementById("content").value = "";
-          document.getElementById("image_url").value = "";
+        try {
+          const res = await fetch("/api/send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ content, image_url }),
+          });
+          const data = await res.json();
+          showStatus(data.message, data.status === "error");
+          if (data.status === "success") {
+            document.getElementById("content").value = "";
+            document.getElementById("image_url").value = "";
+          }
+        } catch (error) {
+          showStatus("Could not send the message. Please try again.", true);
         }
       }
     </script>
