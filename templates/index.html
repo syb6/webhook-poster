@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Discord Webhook Web App</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #121212;
+      color: #e0e0e0;
+      display: flex;
+      justify-content: center;
+      padding: 30px;
+    }
+    .container {
+      width: 100%;
+      max-width: 550px;
+      background-color: #1e1e1e;
+      padding: 25px;
+      border-radius: 10px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    }
+    h2, h3 { color: #5865f2; margin-top: 0; }
+    .section { margin-bottom: 25px; border-bottom: 1px solid #333; padding-bottom: 15px; }
+    label { display: block; margin-bottom: 5px; font-weight: bold; }
+    input[type="text"], textarea {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 12px;
+      background-color: #2b2b2b;
+      border: 1px solid #444;
+      border-radius: 5px;
+      color: #fff;
+      box-sizing: border-box;
+    }
+    textarea { resize: vertical; height: 80px; }
+    button {
+      width: 100%;
+      padding: 12px;
+      background-color: #5865f2;
+      border: none;
+      color: white;
+      font-weight: bold;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button:hover { background-color: #4752c4; }
+    .status {
+      margin-top: 15px;
+      padding: 10px;
+      border-radius: 5px;
+      display: none;
+      font-weight: bold;
+    }
+    .status.success { background-color: #1b5e20; color: #a5d6a7; display: block; }
+    .status.error { background-color: #b71c1c; color: #ef9a9a; display: block; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h2>Discord Webhook Interface</h2>
+    
+    <!-- Configuration Section -->
+    <div class="section">
+      <h3>Settings</h3>
+      <label>Webhook URL</label>
+      <input type="text" id="webhook_url" value="{{ config.webhook_url }}" placeholder="https://discord.com/api/webhooks/...">
+      
+      <label>Bot Username</label>
+      <input type="text" id="username" value="{{ config.username }}">
+      
+      <label>Avatar Image URL</label>
+      <input type="text" id="avatar_url" value="{{ config.avatar_url }}">
+      
+      <button onclick="saveConfig()">Save Settings</button>
+    </div>
+
+    <!-- Send Message Section -->
+    <div class="section" style="border: none;">
+      <h3>Send Message</h3>
+      <label>Message Content</label>
+      <textarea id="content" placeholder="Enter message here..."></textarea>
+      
+      <label>Image Embed URL (Optional)</label>
+      <input type="text" id="image_url" placeholder="https://example.com/image.png">
+      
+      <button onclick="sendMessage()">Send Message</button>
+    </div>
+
+    <div id="status" class="status"></div>
+  </div>
+
+  <script>
+    function showStatus(text, isError) {
+      const statusDiv = document.getElementById("status");
+      statusDiv.innerText = text;
+      statusDiv.className = "status " + (isError ? "error" : "success");
+    }
+
+    async function saveConfig() {
+      const webhook_url = document.getElementById("webhook_url").value;
+      const username = document.getElementById("username").value;
+      const avatar_url = document.getElementById("avatar_url").value;
+
+      const res = await fetch("/api/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ webhook_url, username, avatar_url })
+      });
+      const data = await res.json();
+      showStatus(data.message, data.status === "error");
+    }
+
+    async function sendMessage() {
+      const content = document.getElementById("content").value;
+      const image_url = document.getElementById("image_url").value;
+
+      const res = await fetch("/api/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content, image_url })
+      });
+      const data = await res.json();
+      showStatus(data.message, data.status === "error");
+      if (data.status === "success") {
+        document.getElementById("content").value = "";
+        document.getElementById("image_url").value = "";
+      }
+    }
+  </script>
+</body>
+</html>
