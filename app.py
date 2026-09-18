@@ -140,11 +140,17 @@ def login():
         if login_is_rate_limited(client_id):
             return render_template("login.html", error="Too many attempts. Try again later.", next_url=next_url), 429
 
+        if not APP_PASSWORD_HASH:
+            return render_template(
+                "login.html",
+                error="Login is not configured. Set APP_PASSWORD_HASH before starting the app.",
+                next_url=next_url,
+            ), 503
+
         username = request.form.get("username", "")
         password = request.form.get("password", "")
         valid_login = (
-            bool(APP_PASSWORD_HASH)
-            and secrets.compare_digest(username, APP_USERNAME)
+            secrets.compare_digest(username, APP_USERNAME)
             and check_password_hash(APP_PASSWORD_HASH, password)
         )
         if valid_login:
