@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sign in</title>
+    <style>
+      body {
+        font-family: "Segoe UI", sans-serif;
+        background: #121212;
+        color: #e0e0e0;
+        display: flex;
+        justify-content: center;
+        padding: 30px;
+      }
+      .container {
+        width: 100%;
+        max-width: 420px;
+        background: #1e1e1e;
+        padding: 25px;
+        border-radius: 10px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+      }
+      h2 {
+        color: #5865f2;
+        margin-top: 0;
+      }
+      label {
+        display: block;
+        margin: 14px 0 5px;
+        font-weight: bold;
+      }
+      input,
+      button {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 12px;
+        border-radius: 5px;
+      }
+      input {
+        background: #2b2b2b;
+        border: 1px solid #444;
+        color: #fff;
+      }
+      button {
+        margin-top: 18px;
+        border: 0;
+        background: #5865f2;
+        color: #fff;
+        font-weight: bold;
+        cursor: pointer;
+      }
+      .error {
+        margin-top: 15px;
+        padding: 10px;
+        background: #b71c1c;
+        color: #ef9a9a;
+        border-radius: 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="container">
+      <h2>Sign in</h2>
+      <form method="post" action="{{ url_for('login') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <input type="hidden" name="next" value="{{ next_url }}" />
+        <label for="username">Username</label>
+        <input id="username" name="username" autocomplete="username" required />
+        <label for="password">Password</label>
+        <input
+          id="password"
+          name="password"
+          type="password"
+          autocomplete="current-password"
+          required
+        />
+        <button type="submit">Sign in</button>
+      </form>
+      {% if error %}
+      <div class="error">{{ error }}</div>
+      {% endif %}
+    </main>
+  </body>
+</html>

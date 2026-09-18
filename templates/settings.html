@@ -67,6 +67,13 @@
       .back-link:hover {
         background-color: #555;
       }
+      .logout-button {
+        margin-top: 10px;
+        background-color: #444;
+      }
+      .logout-button:hover {
+        background-color: #555;
+      }
       .status {
         margin-top: 15px;
         padding: 10px;
@@ -106,6 +113,10 @@
 
       <button type="button" onclick="saveConfig()">Save Settings</button>
       <a class="back-link" href="{{ url_for('index') }}">Back to sender</a>
+      <form method="post" action="{{ url_for('logout') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <button class="logout-button" type="submit">Log out</button>
+      </form>
       <div id="status" class="status"></div>
     </div>
 
@@ -124,7 +135,10 @@
         try {
           const res = await fetch("/api/config", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              "X-CSRF-Token": "{{ csrf_token }}",
+            },
             body: JSON.stringify({ webhook_url, username, avatar_url }),
           });
           const data = await res.json();
