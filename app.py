@@ -1,11 +1,13 @@
 import json
 import os
+import secrets
 import tempfile
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from urllib.parse import urlparse
 
 from flask import Flask, jsonify, render_template, request
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
@@ -15,7 +17,7 @@ DEFAULT_CONFIG = {
     "avatar_url": "https://i.imgur.com/4M34hi2.png",
 }
 app.config.update(
-    MAX_CONTENT_LENGTH=16 * 1024,
+    MAX_CONTENT_LENGTH=8 * 1024 * 1024,
 )
 
 
@@ -72,6 +74,33 @@ def is_valid_webhook_url(value):
     )
 
 
+def build_multipart_body(fields, file_field, file_name, file_type, file_data, boundary):
+    parts = []
+    for name, value in fields.items():
+        parts.extend(
+            [
+                f"--{boundary}\r\n".encode(),
+                f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode(),
+                str(value).encode(),
+                b"\r\n",
+            ]
+        )
+    parts.extend(
+        [
+            f"--{boundary}\r\n".encode(),
+            (
+                f'Content-Disposition: form-data; name="{file_field}"; '
+                f'filename="{file_name}"\r\n'
+            ).encode(),
+            f"Content-Type: {file_type}\r\n\r\n".encode(),
+            file_data,
+            b"\r\n",
+            f"--{boundary}--\r\n".encode(),
+        ]
+    )
+    return b"".join(parts)
+
+
 @app.route("/")
 def index():
     """Renders the message sender page."""
@@ -108,7 +137,7 @@ def update_config():
 @app.route("/api/send", methods=["POST"])
 def send_webhook():
     """Handles posting messages to the Discord Webhook."""
-    data = request.get_json(silent=True) or {}
+    data = request.form if request.files else (request.get_json(silent=True) or {})
     config = load_config()
 
     webhook_url = config.get("webhook_url")
@@ -117,9 +146,19 @@ def send_webhook():
 
     content = str(data.get("content", "")).strip()[:2000]
     image_url = str(data.get("image_url", "")).strip()[:2000]
+    uploaded_image = request.files.get("image")
+    has_uploaded_image = bool(uploaded_image and uploaded_image.filename)
 
-    if not content and not image_url:
+    if not content and not image_url and not has_uploaded_image:
         return jsonify({"status": "error", "message": "Cannot send empty message!"}), 400
+
+    if has_uploaded_image:
+        image_type = uploaded_image.mimetype or ""
+        if not image_type.startswith("image/"):
+            return jsonify({"status": "error", "message": "Uploaded file must be an image."}), 400
+        image_data = uploaded_image.read()
+        if not image_data:
+            return jsonify({"status": "error", "message": "Uploaded image is empty."}), 400
 
     payload = {
         "username": config["username"],
@@ -131,14 +170,25 @@ def send_webhook():
         payload["embeds"] = [{"image": {"url": image_url}}]
 
     try:
-        json_data = json.dumps(payload).encode("utf-8")
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        if has_uploaded_image:
+            boundary = f"----WebhookForm{secrets.token_hex(16)}"
+            request_data = build_multipart_body(
+                {"payload_json": json.dumps(payload)},
+                "file",
+                secure_filename(uploaded_image.filename) or "image",
+                image_type,
+                image_data,
+                boundary,
+            )
+            headers["Content-Type"] = f"multipart/form-data; boundary={boundary}"
+        else:
+            request_data = json.dumps(payload).encode("utf-8")
+            headers["Content-Type"] = "application/json"
         req = Request(
             webhook_url,
-            data=json_data,
-            headers={
-                "Content-Type": "application/json",
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-            },
+            data=request_data,
+            headers=headers,
             method="POST",
         )
         with urlopen(req, timeout=5) as response:

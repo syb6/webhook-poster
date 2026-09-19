@@ -37,6 +37,7 @@
         font-weight: bold;
       }
       input[type="text"],
+      input[type="file"],
       textarea {
         width: 100%;
         padding: 10px;
@@ -50,6 +51,9 @@
       textarea {
         resize: vertical;
         height: 80px;
+      }
+      input[type="file"] {
+        padding: 8px;
       }
       button {
         width: 100%;
@@ -117,6 +121,9 @@
           placeholder="https://example.com/image.png"
         />
 
+        <label for="image">Upload Image (Optional)</label>
+        <input type="file" id="image" accept="image/*" />
+
         <button onclick="sendMessage()">Send Message</button>
       </div>
 
@@ -133,20 +140,25 @@
       async function sendMessage() {
         const content = document.getElementById("content").value;
         const image_url = document.getElementById("image_url").value;
+        const image = document.getElementById("image").files[0];
+        const formData = new FormData();
+        formData.append("content", content);
+        formData.append("image_url", image_url);
+        if (image) {
+          formData.append("image", image);
+        }
 
         try {
           const res = await fetch("/api/send", {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ content, image_url }),
+            body: formData,
           });
           const data = await res.json();
           showStatus(data.message, data.status === "error");
           if (data.status === "success") {
             document.getElementById("content").value = "";
             document.getElementById("image_url").value = "";
+            document.getElementById("image").value = "";
           }
         } catch (error) {
           showStatus("Could not send the message. Please try again.", true);
